@@ -14,6 +14,7 @@ body{background:#080808;min-height:100vh;display:flex;flex-direction:column;alig
 @keyframes twinkle{0%,100%{opacity:0.15;transform:scale(0.7)}50%{opacity:0.6;transform:scale(1)}}
 
 #stars-canvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+#meteor-global{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .page{max-width:620px;width:100%;position:relative;z-index:1}
 
 /* === 黑胶播放器主体 === */
@@ -241,6 +242,7 @@ body{background:#080808;min-height:100vh;display:flex;flex-direction:column;alig
 
 <div class="bg-stars" id="bgStars"></div>
 <canvas id="stars-canvas"></canvas>
+<canvas id="meteor-global"></canvas>
 
 <!-- 黑胶唱片播放器 -->
 <div class="vinyl-player" id="vinylPlayer">
@@ -715,6 +717,72 @@ body{background:#080808;min-height:100vh;display:flex;flex-direction:column;alig
     return {resize:resize, loop:loop};
   }
 
+  /* ===== 全屏流星系统（密度更高） ===== */
+  function initGlobalMeteorSystem(canvas){
+    var ctx=canvas.getContext('2d');
+    var meteors=[];
+    var ML=70, W=0, H=0;
+
+    function resize(){
+      W=window.innerWidth; H=window.innerHeight;
+      canvas.width=W; canvas.height=H;
+    }
+    function spawn(){
+      if(W===0||H===0) return;
+      var sx,sy;
+      // 从左侧或底部随机生成，方向右上方
+      var edge=Math.random();
+      if(edge<0.4){
+        sx=Math.random()*W*0.3; sy=H*0.2+Math.random()*H*0.8;
+      }else if(edge<0.7){
+        sx=Math.random()*W*0.6; sy=H*0.6+Math.random()*H*0.4;
+      }else{
+        sx=Math.random()*W; sy=H*0.05+Math.random()*H*0.35;
+      }
+      var angle=-Math.PI/4;
+      var dist=Math.max(W,H)*1.8;
+      meteors.push({
+        sx:sx, sy:sy,
+        ex:sx+Math.cos(angle)*dist, ey:sy+Math.sin(angle)*dist,
+        life:0, maxLife:300+Math.random()*200, speed:0.003+Math.random()*0.001, alive:true
+      });
+    }
+    function drawFrame(){
+      ctx.clearRect(0,0,W,H);
+      if(W===0||H===0) return;
+      for(var i=meteors.length-1;i>=0;i--){
+        var m=meteors[i];
+        if(!m.alive){meteors.splice(i,1);continue;}
+        m.life++;
+        var p=m.life*m.speed;
+        var op;
+        if(p<0.05) op=p/0.05;
+        else if(p<0.4) op=1;
+        else if(p<0.65) op=1-(p-0.4)/0.25;
+        else{m.alive=false;continue;}
+        var cx=m.sx+(m.ex-m.sx)*p;
+        var cy=m.sy+(m.ey-m.sy)*p;
+        var dx=m.ex-m.sx, dy=m.ey-m.sy;
+        var len=Math.sqrt(dx*dx+dy*dy)||1;
+        var ux=dx/len, uy=dy/len;
+        var tx=cx-ux*ML, ty=cy-uy*ML;
+        var hx=cx+ux*ML*0.35, hy=cy+uy*ML*0.35;
+        var grad=ctx.createLinearGradient(tx,ty,hx,hy);
+        grad.addColorStop(0,'rgba(201,169,110,0)');
+        grad.addColorStop(0.5,'rgba(201,169,110,'+(op*0.25)+')');
+        grad.addColorStop(1,'rgba(220,200,160,'+op+')');
+        ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(hx,hy);
+        ctx.strokeStyle=grad; ctx.lineWidth=1; ctx.lineCap='round'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(hx,hy,1.8,0,Math.PI*2);
+        ctx.fillStyle='rgba(220,200,160,'+(op*0.8)+')'; ctx.fill();
+      }
+    }
+    function loop(){ if(W===0||H===0) resize(); if(Math.random()<0.18) spawn(); drawFrame(); }
+    resize();
+    window.addEventListener('resize', resize);
+    return {resize:resize, loop:loop};
+  }
+
   /* ===== 启动 ===== */
   window.addEventListener('DOMContentLoaded', function(){
     createBgStars();
@@ -736,7 +804,8 @@ body{background:#080808;min-height:100vh;display:flex;flex-direction:column;alig
 
     var m1=initMeteorSystem(document.getElementById('meteor-opening'));
     var m2=initMeteorSystem(document.getElementById('meteor-closing'));
-    function ml(){ m1.loop(); m2.loop(); requestAnimationFrame(ml); }
+    var mg=initGlobalMeteorSystem(document.getElementById('meteor-global'));
+    function ml(){ m1.loop(); m2.loop(); mg.loop(); requestAnimationFrame(ml); }
     setTimeout(ml, 100);
 
     window.addEventListener('resize', function(){ m1.resize(); m2.resize(); resizeParticles(); });
